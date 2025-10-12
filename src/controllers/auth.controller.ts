@@ -2,32 +2,71 @@ import { Request, Response } from "express";
 import { pool } from "./../db/db";
 import { generateTokens } from "../middlewares/auth.middleware";
 
-// Login or create user (save verification token)
 export const loginOrCreateUser = async (req: any, res: any) => {
   const { email, name, wallet_address, mobile_number, verificationToken } =
     req.body;
-  if (!verificationToken)
+
+  if (!verificationToken) {
     return res.status(400).json({ error: "Verification token required" });
+  }
 
   try {
-    let user = (await pool.query(`SELECT * FROM users WHERE email=$1`, [email]))
-      .rows[0];
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let index = 1;
+
+    // Helper to add only valid (non-null, non-empty) fields
+    const addCondition = (field: string, value: any) => {
+      if (value && String(value).trim() !== "") {
+        conditions.push(`${field} = $${index++}`);
+        values.push(value.trim());
+      }
+    };
+
+    addCondition("email", email);
+    addCondition("wallet_address", wallet_address);
+    addCondition("mobile_number", mobile_number);
+    addCondition("name", name);
+
+    let user = null;
+
+    if (conditions.length > 0) {
+      const query = `SELECT * FROM users WHERE ${conditions.join(
+        " OR "
+      )} LIMIT 1`;
+      const result = await pool.query(query, values);
+      user = result.rows[0];
+    }
 
     if (!user) {
       const insertResult = await pool.query(
-        `INSERT INTO users (name, email, wallet_address, mobile_number) VALUES ($1, $2, $3, $4) RETURNING *`,
-        [name, email, wallet_address, mobile_number]
+        `INSERT INTO users (name, email, wallet_address, mobile_number)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *`,
+        [
+          name && String(name).trim() !== "" ? name.trim() : null,
+          email && String(email).trim() !== "" ? email.trim() : null,
+          wallet_address && String(wallet_address).trim() !== ""
+            ? wallet_address.trim()
+            : null,
+          mobile_number && String(mobile_number).trim() !== ""
+            ? mobile_number.trim()
+            : null,
+        ]
       );
       user = insertResult.rows[0];
     }
 
     await pool.query(
-      `INSERT INTO verification (user_id, token) VALUES ($1, $2) ON CONFLICT (token) DO NOTHING`,
+      `INSERT INTO verification (user_id, token)
+       VALUES ($1, $2)
+       ON CONFLICT (token) DO NOTHING`,
       [user.id, verificationToken]
     );
 
     res.json({ user });
   } catch (err: any) {
+    console.error("Error in loginOrCreateUser:", err);
     res.status(500).json({ error: err.message });
   }
 };
