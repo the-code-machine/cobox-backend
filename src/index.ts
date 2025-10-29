@@ -40,7 +40,7 @@ app.post("/api/users/login-or-create", loginOrCreateUser);
 app.post("/api/users/verify-launcher", verifyLauncherToken);
 app.post("/api/token/refresh", refreshToken);
 app.get("/api/users", getUsers);
-app.get("/api/users/:id", getUserDetail);
+app.get("/api/users/:id", authenticateJWT, getUserDetail);
 
 // Protected routes
 app.post("/api/users", authenticateJWT, createUser);
