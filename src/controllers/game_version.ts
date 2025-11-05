@@ -46,15 +46,15 @@ export const getGameVersionById = async (req, res) => {
 // Update game version by title
 export const updateGameVersion = async (req, res) => {
   try {
-    const { title } = req.params;
+    const { id } = req.params;
     const { version, link } = req.body;
 
     const result = await client.query(
       `UPDATE game_version 
        SET version = $1, link = $2 
-       WHERE title = $3
+       WHERE id = $3
        RETURNING *`,
-      [version, link, title]
+      [version, link, id]
     );
 
     if (result.rowCount === 0) {

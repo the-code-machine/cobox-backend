@@ -65,8 +65,8 @@ app.delete("/api/games/:id", deleteGame);
 app.get("/api/game-version/:id", getGameVersionById);
 
 app.post("/api/game-version", createGameVersion);
-app.put("/api/game-version/:title", updateGameVersion);
-app.delete("/api/game-version/:title", deleteGameVersion);
+app.put("/api/game-version/:id", updateGameVersion);
+app.delete("/api/game-version/:id", deleteGameVersion);
 
 app.listen(PORT, () =>
   console.log(`🚀 Server running at http://localhost:${PORT}`)
