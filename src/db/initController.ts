@@ -37,6 +37,21 @@ export const initTables = async () => {
     install_count INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
+
+
+  
+`);
+
+    await client.query(`
+  CREATE TABLE IF NOT EXISTS game_version (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    version TEXT,
+    link TEXT,
+  );
+
+
+  
 `);
 
     console.log("✅ Tables created or already exist.");

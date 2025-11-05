@@ -21,6 +21,11 @@ import {
   updateGame,
   deleteGame,
 } from "./controllers/game.controller";
+import {
+  createGameVersion,
+  deleteGameVersion,
+  updateGameVersion,
+} from "./controllers/game_version";
 
 dotenv.config();
 const app = express();
@@ -56,6 +61,9 @@ app.get("/api/games/:id", getGame);
 app.post("/api/games", createGame);
 app.put("/api/games/:id", updateGame);
 app.delete("/api/games/:id", deleteGame);
+app.post("/api/game-version", createGameVersion);
+app.put("/api/game-version/:title", updateGameVersion);
+app.delete("/api/game-version/:title", deleteGameVersion);
 
 app.listen(PORT, () =>
   console.log(`🚀 Server running at http://localhost:${PORT}`)
