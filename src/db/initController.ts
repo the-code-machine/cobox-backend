@@ -47,7 +47,7 @@ export const initTables = async () => {
     id SERIAL PRIMARY KEY,
     title VARCHAR(200) NOT NULL,
     version TEXT,
-    link TEXT,
+    link TEXT
   );
 
 
