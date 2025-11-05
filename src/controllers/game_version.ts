@@ -23,6 +23,26 @@ export const createGameVersion = async (req, res) => {
   }
 };
 
+export const getGameVersionById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await client.query(
+      `SELECT * FROM game_version WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Game version not found" });
+    }
+
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    console.error("Error fetching game version:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 // Update game version by title
 export const updateGameVersion = async (req, res) => {
   try {

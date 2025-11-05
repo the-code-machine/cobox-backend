@@ -24,6 +24,7 @@ import {
 import {
   createGameVersion,
   deleteGameVersion,
+  getGameVersionById,
   updateGameVersion,
 } from "./controllers/game_version";
 
@@ -61,6 +62,8 @@ app.get("/api/games/:id", getGame);
 app.post("/api/games", createGame);
 app.put("/api/games/:id", updateGame);
 app.delete("/api/games/:id", deleteGame);
+app.get("/api/game-version/:id", getGameVersionById);
+
 app.post("/api/game-version", createGameVersion);
 app.put("/api/game-version/:title", updateGameVersion);
 app.delete("/api/game-version/:title", deleteGameVersion);
