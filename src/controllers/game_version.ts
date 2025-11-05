@@ -71,11 +71,11 @@ export const updateGameVersion = async (req, res) => {
 // Delete game version by title
 export const deleteGameVersion = async (req, res) => {
   try {
-    const { title } = req.params;
+    const { id } = req.params;
 
     const result = await client.query(
-      `DELETE FROM game_version WHERE title = $1 RETURNING *`,
-      [title]
+      `DELETE FROM game_version WHERE id = $1 RETURNING *`,
+      [id]
     );
 
     if (result.rowCount === 0) {
