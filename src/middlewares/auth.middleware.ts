@@ -2,8 +2,8 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
-const JWT_EXPIRE = "1m";
-const REFRESH_EXPIRE = "7d";
+const JWT_EXPIRE = "365d";
+const REFRESH_EXPIRE = "365d";
 
 export const generateTokens = (userId: number) => {
   const accessToken = jwt.sign({ userId }, JWT_SECRET, {
