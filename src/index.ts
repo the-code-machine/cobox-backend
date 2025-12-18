@@ -25,6 +25,7 @@ import { upload } from "./middlewares/upload.middleware";
 import {
   publishGame,
   getAllPublishedGames,
+  getMyPublishedGames,
 } from "./controllers/publish.controller";
 dotenv.config();
 const app = express();
@@ -63,6 +64,7 @@ app.use("/storage", express.static(path.join(process.cwd(), "storage")));
 // Get all games (Public)
 app.get("/api/published-games", getAllPublishedGames);
 
+app.get("/api/published-games//my-games", authenticateJWT, getMyPublishedGames);
 // Publish a new game (Multipart Form Data)
 // We use .fields() to accept two different file inputs from the frontend
 app.post(
