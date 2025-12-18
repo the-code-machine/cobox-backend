@@ -6,7 +6,7 @@ export const publishGame = async (req: Request, res: Response) => {
     const userId = req.userId;
 
     // 2. Get other metadata from req.body
-    const { title, description, authorName } = req.body;
+    const { title, description, authorName, id } = req.body;
 
     // Access files uploaded by Multer
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -27,8 +27,8 @@ export const publishGame = async (req: Request, res: Response) => {
     }
 
     const query = `
-      INSERT INTO published_games (user_id, title, description, thumbnail, author_name, file_path)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO published_games (user_id, title, description, thumbnail, author_name, file_path,id)
+      VALUES ($1, $2, $3, $4, $5, $6, #7)
       RETURNING *;
     `;
 
@@ -39,6 +39,7 @@ export const publishGame = async (req: Request, res: Response) => {
       thumbnailPath,
       authorName,
       gameFilePath,
+      id,
     ];
     const result = await pool.query(query, values);
 
