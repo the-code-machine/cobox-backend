@@ -27,22 +27,6 @@ export const initTables = async () => {
 `);
 
     await client.query(`
-  CREATE TABLE IF NOT EXISTS games (
-    id SERIAL PRIMARY KEY,
-    title VARCHAR(200) NOT NULL,
-    description TEXT,
-    data JSONB,
-    thumbnail BYTEA,
-    view_count INTEGER DEFAULT 0,
-    install_count INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-
-  
-`);
-
-    await client.query(`
   CREATE TABLE IF NOT EXISTS game_version (
     id SERIAL PRIMARY KEY,
     title VARCHAR(200) NOT NULL,
@@ -52,6 +36,21 @@ export const initTables = async () => {
 
 
   
+`);
+    await client.query(`
+  CREATE TABLE IF NOT EXISTS published_games (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, -- Link to creator
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    thumbnail TEXT NOT NULL,
+    author_name VARCHAR(150) NOT NULL,
+    file_path TEXT NOT NULL,
+    view_count INTEGER DEFAULT 0,
+    install_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
     console.log("✅ Tables created or already exist.");

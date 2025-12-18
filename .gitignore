@@ -28,3 +28,5 @@ Thumbs.db
 # Optional: uploads or temporary files
 uploads/
 tmp/
+
+storage/
