@@ -26,6 +26,8 @@ import {
   publishGame,
   getAllPublishedGames,
   getMyPublishedGames,
+  incrementView,
+  incrementInstall,
 } from "./controllers/publish.controller";
 dotenv.config();
 const app = express();
@@ -76,6 +78,9 @@ app.post(
   ]),
   publishGame
 );
+app.put("/api/published-games/:id/view", authenticateJWT, incrementView);
+app.put("/api/published-games/:id/install", authenticateJWT, incrementInstall);
+
 app.listen(PORT, () =>
   console.log(`🚀 Server running at http://localhost:${PORT}`)
 );

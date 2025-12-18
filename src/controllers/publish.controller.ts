@@ -145,3 +145,55 @@ export const deletePublishedGame = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
+// Increment Install Count (Triggered when user clicks 'Play')
+export const incrementInstall = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const query = `
+      UPDATE published_games 
+      SET install_count = install_count + 1 
+      WHERE id = $1 
+      RETURNING install_count;
+    `;
+    const result = await pool.query(query, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Game not found" });
+    }
+
+    res
+      .status(200)
+      .json({ success: true, install_count: result.rows[0].install_count });
+  } catch (error) {
+    console.error("Install increment error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+// Increment View Count (Triggered when user views details)
+export const incrementView = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const query = `
+      UPDATE published_games 
+      SET view_count = view_count + 1 
+      WHERE id = $1 
+      RETURNING view_count;
+    `;
+    const result = await pool.query(query, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Game not found" });
+    }
+
+    res
+      .status(200)
+      .json({ success: true, view_count: result.rows[0].view_count });
+  } catch (error) {
+    console.error("View increment error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
