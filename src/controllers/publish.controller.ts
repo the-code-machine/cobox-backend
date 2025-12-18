@@ -28,7 +28,7 @@ export const publishGame = async (req: Request, res: Response) => {
 
     const query = `
       INSERT INTO published_games (user_id, title, description, thumbnail, author_name, file_path,id)
-      VALUES ($1, $2, $3, $4, $5, $6, #7)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *;
     `;
 
