@@ -90,3 +90,57 @@ export const getGameById = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 };
+
+export const getMyPublishedGames = async (req: Request, res: Response) => {
+  try {
+    const userId = req.userId; // Provided by your authenticateJWT middleware
+
+    if (!userId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const query = `
+      SELECT pg.*, u.name as creator_name 
+      FROM published_games pg
+      LEFT JOIN users u ON pg.user_id = u.id
+      WHERE pg.user_id = $1
+      ORDER BY pg.created_at DESC;
+    `;
+
+    const result = await pool.query(query, [userId]);
+
+    return res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error("Error in getMyPublishedGames:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const deletePublishedGame = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const userId = req.userId;
+
+  try {
+    const query = `
+      DELETE FROM published_games 
+      WHERE id = $1 AND user_id = $2 
+      RETURNING *;
+    `;
+    const result = await pool.query(query, [id, userId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Game not found or unauthorized" });
+    }
+
+    res
+      .status(200)
+      .json({ success: true, message: "Game removed from live server" });
+  } catch (error) {
+    console.error("Delete Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
