@@ -3,7 +3,10 @@ import { pool } from "./../db/db";
 
 export const publishGame = async (req: Request, res: Response) => {
   try {
-    const { userId, title, description, authorName } = req.body;
+    const userId = req.userId;
+
+    // 2. Get other metadata from req.body
+    const { title, description, authorName } = req.body;
 
     // Access files uploaded by Multer
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
