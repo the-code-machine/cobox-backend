@@ -53,6 +53,20 @@ export const initTables = async () => {
   );
 `);
 
+    await client.query(`
+CREATE TYPE admin_role AS ENUM ('super_admin', 'admin', 'moderator');
+
+CREATE TABLE admins (
+    id SERIAL PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role admin_role DEFAULT 'admin',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+`);
     console.log("✅ Tables created or already exist.");
   } catch (err) {
     console.error("❌ Error initializing tables:", err);

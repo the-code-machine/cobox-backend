@@ -29,10 +29,19 @@ import {
   incrementView,
   incrementInstall,
 } from "./controllers/publish.controller";
+
+import {
+  loginAdmin,
+  createAdmin,
+  getAdminProfile,
+} from "./controllers/admin.controller";
+import { authenticateToken } from "./middlewares/admin.middleware";
+import cookieParser from "cookie-parser";
 dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
 // Increase JSON & URL-encoded body limit to 100MB
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
@@ -80,6 +89,10 @@ app.post(
 );
 app.put("/api/published-games/:id/view", authenticateJWT, incrementView);
 app.put("/api/published-games/:id/install", authenticateJWT, incrementInstall);
+
+app.post("/api/v1/admin/register", createAdmin); // Create new admin
+app.post("/api/v1/admin/login", loginAdmin); // Login & Get Token
+app.get("/api/v1/admin/me", authenticateToken, getAdminProfile);
 
 app.listen(PORT, () =>
   console.log(`🚀 Server running at http://localhost:${PORT}`)
