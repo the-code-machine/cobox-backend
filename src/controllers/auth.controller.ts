@@ -7,54 +7,76 @@ export const loginOrCreateUser = async (req: any, res: any) => {
     req.body;
 
   try {
-    const conditions: string[] = [];
-    const values: any[] = [];
-    let index = 1;
-
-    // Helper to add only valid (non-null, non-empty) fields
-    const addCondition = (field: string, value: any) => {
-      if (value && String(value).trim() !== "") {
-        conditions.push(`${field} = $${index++}`);
-        values.push(value.trim());
-      }
-    };
-
-    // 1. SEARCH CRITERIA: Only use Unique Identifiers
-    // REMOVED: addCondition("name", name);  <-- THIS WAS THE BUG
-    addCondition("email", email);
-    addCondition("wallet_address", wallet_address);
-    addCondition("mobile_number", mobile_number);
-
     let user = null;
 
-    // 2. Try to find existing user
-    if (conditions.length > 0) {
-      // Logic: Find user matching Email OR Wallet OR Phone
-      const query = `SELECT * FROM users WHERE ${conditions.join(" OR ")} LIMIT 1`;
-      const result = await pool.query(query, values);
-      user = result.rows[0];
+    // --- STEP 1: Find User (Prioritize Wallet, then Email) ---
+
+    // A. Try finding by Wallet Address first (Strongest link for Web3)
+    if (wallet_address) {
+      const walletQuery = `SELECT * FROM users WHERE wallet_address = $1 LIMIT 1`;
+      const walletRes = await pool.query(walletQuery, [wallet_address]);
+      user = walletRes.rows[0];
     }
 
-    // 3. Handle "User Found" vs "Create New"
+    // B. If not found by wallet, try finding by Email
+    if (!user && email) {
+      const emailQuery = `SELECT * FROM users WHERE email = $1 LIMIT 1`;
+      const emailRes = await pool.query(emailQuery, [email]);
+      user = emailRes.rows[0];
+    }
+
+    // --- STEP 2: Logic to UPDATE or CREATE ---
+
     if (user) {
-      // OPTIONAL: Update the user's wallet if they logged in with a known email but a new wallet address
-      // This happens often with Social Logins on different devices
-      if (
-        wallet_address &&
-        user.wallet_address !== wallet_address &&
-        wallet_address.trim() !== ""
-      ) {
-        await pool.query(`UPDATE users SET wallet_address = $1 WHERE id = $2`, [
-          wallet_address,
-          user.id,
-        ]);
-        // Update the local user object to reflect the change
+      // User FOUND. Now check if we need to upgrade their data.
+
+      const updates = [];
+      const values = [];
+      let index = 1;
+
+      // Check 1: Update Email if the DB has a placeholder/null and we have a real one
+      // (e.g. upgrading from "0x...@wallet.connect" to "caplock.connect@gmail.com")
+      const isPlaceholderEmail =
+        !user.email || user.email.includes("@wallet.connect");
+      if (email && (isPlaceholderEmail || user.email !== email)) {
+        // Only update if the new email is "better" (not a placeholder)
+        if (!email.includes("@wallet.connect")) {
+          updates.push(`email = $${index++}`);
+          values.push(email);
+          // Update local object for response
+          user.email = email;
+        }
+      }
+
+      // Check 2: Update Name if DB has generic name and we have a specific one
+      const isGenericName =
+        !user.name ||
+        user.name.includes("User") ||
+        user.name.includes("Wallet");
+      if (name && isGenericName && name !== user.name) {
+        updates.push(`name = $${index++}`);
+        values.push(name);
+        user.name = name;
+      }
+
+      // Check 3: Update Wallet if found by email but wallet is missing/different
+      if (wallet_address && user.wallet_address !== wallet_address) {
+        updates.push(`wallet_address = $${index++}`);
+        values.push(wallet_address);
         user.wallet_address = wallet_address;
       }
-    } else {
-      // 4. If no user found, create a new one
 
-      // Guard: Don't create empty users
+      // EXECUTE UPDATES if any needed
+      if (updates.length > 0) {
+        values.push(user.id); // Add ID as the last parameter
+        const updateQuery = `UPDATE users SET ${updates.join(", ")} WHERE id = $${index} RETURNING *`;
+        const updateRes = await pool.query(updateQuery, values);
+        user = updateRes.rows[0]; // Get the fresh, updated user
+      }
+    } else {
+      // --- STEP 3: Create New User (If absolutely no match found) ---
+
+      // Guard against empty payloads
       if (!email && !wallet_address && !mobile_number) {
         return res
           .status(400)
@@ -66,20 +88,16 @@ export const loginOrCreateUser = async (req: any, res: any) => {
          VALUES ($1, $2, $3, $4)
          RETURNING *`,
         [
-          name && String(name).trim() !== "" ? name.trim() : null,
-          email && String(email).trim() !== "" ? email.trim() : null,
-          wallet_address && String(wallet_address).trim() !== ""
-            ? wallet_address.trim()
-            : null,
-          mobile_number && String(mobile_number).trim() !== ""
-            ? mobile_number.trim()
-            : null,
+          name?.trim() || "New User",
+          email?.trim() || null,
+          wallet_address?.trim() || null,
+          mobile_number?.trim() || null,
         ],
       );
       user = insertResult.rows[0];
     }
 
-    // 5. Save Verification Token (If provided)
+    // --- STEP 4: Handle Verification Token (Optional) ---
     if (verificationToken) {
       await pool.query(
         `INSERT INTO verification (user_id, token)
@@ -89,7 +107,7 @@ export const loginOrCreateUser = async (req: any, res: any) => {
       );
     }
 
-    // 6. Generate Tokens
+    // --- STEP 5: Return User & Tokens ---
     const tokens = generateTokens(user.id);
 
     res.json({
@@ -99,6 +117,12 @@ export const loginOrCreateUser = async (req: any, res: any) => {
     });
   } catch (err: any) {
     console.error("Error in loginOrCreateUser:", err);
+    // Handle unique constraint violations gracefully (rare race condition)
+    if (err.code === "23505") {
+      return res
+        .status(409)
+        .json({ error: "User conflict. Please try logging in again." });
+    }
     res.status(500).json({ error: err.message });
   }
 };
