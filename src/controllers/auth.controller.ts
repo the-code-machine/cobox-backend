@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { pool } from "./../db/db";
-import { generateTokens } from "../middlewares/auth.middleware"; // Ensure this is imported
+import { generateTokens } from "../middlewares/auth.middleware";
 
 export const loginOrCreateUser = async (req: any, res: any) => {
   const { email, name, wallet_address, mobile_number, verificationToken } =
@@ -19,22 +19,41 @@ export const loginOrCreateUser = async (req: any, res: any) => {
       }
     };
 
+    // 1. SEARCH CRITERIA: Only use Unique Identifiers
+    // REMOVED: addCondition("name", name);  <-- THIS WAS THE BUG
     addCondition("email", email);
     addCondition("wallet_address", wallet_address);
     addCondition("mobile_number", mobile_number);
-    addCondition("name", name);
 
     let user = null;
 
-    // 1. Try to find existing user
+    // 2. Try to find existing user
     if (conditions.length > 0) {
+      // Logic: Find user matching Email OR Wallet OR Phone
       const query = `SELECT * FROM users WHERE ${conditions.join(" OR ")} LIMIT 1`;
       const result = await pool.query(query, values);
       user = result.rows[0];
     }
 
-    // 2. If no user found, create a new one
-    if (!user) {
+    // 3. Handle "User Found" vs "Create New"
+    if (user) {
+      // OPTIONAL: Update the user's wallet if they logged in with a known email but a new wallet address
+      // This happens often with Social Logins on different devices
+      if (
+        wallet_address &&
+        user.wallet_address !== wallet_address &&
+        wallet_address.trim() !== ""
+      ) {
+        await pool.query(`UPDATE users SET wallet_address = $1 WHERE id = $2`, [
+          wallet_address,
+          user.id,
+        ]);
+        // Update the local user object to reflect the change
+        user.wallet_address = wallet_address;
+      }
+    } else {
+      // 4. If no user found, create a new one
+
       // Guard: Don't create empty users
       if (!email && !wallet_address && !mobile_number) {
         return res
@@ -60,8 +79,7 @@ export const loginOrCreateUser = async (req: any, res: any) => {
       user = insertResult.rows[0];
     }
 
-    // 3. Save Verification Token (If provided - e.g. for Desktop Launcher Sync)
-    // We do this silently so it doesn't block the web login
+    // 5. Save Verification Token (If provided)
     if (verificationToken) {
       await pool.query(
         `INSERT INTO verification (user_id, token)
@@ -71,14 +89,12 @@ export const loginOrCreateUser = async (req: any, res: any) => {
       );
     }
 
-    // 4. GENERATE TOKENS IMMEDIATELY (The Fix)
-    // This allows the web frontend to log in right now without a second call
+    // 6. Generate Tokens
     const tokens = generateTokens(user.id);
 
-    // 5. Return User AND Tokens
     res.json({
       user,
-      tokens, // Frontend can now use tokens.accessToken
+      tokens,
       message: "Login successful",
     });
   } catch (err: any) {
