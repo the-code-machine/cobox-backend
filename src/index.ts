@@ -89,7 +89,7 @@ app.post(
   publishGame,
 );
 app.put("/api/published-games/:id/view", authenticateJWT, incrementView);
-app.put("/api/published-games/:id", authenticateJWT, getGameById);
+app.get("/api/published-games/:id", authenticateJWT, getGameById);
 app.put("/api/published-games/:id/install", authenticateJWT, incrementInstall);
 
 app.post("/api/v1/admin/register", createAdmin); // Create new admin
