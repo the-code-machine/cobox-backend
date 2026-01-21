@@ -1,14 +1,10 @@
 import { Request, Response } from "express";
 import { pool } from "./../db/db";
-import { generateTokens } from "../middlewares/auth.middleware";
+import { generateTokens } from "../middlewares/auth.middleware"; // Ensure this is imported
 
 export const loginOrCreateUser = async (req: any, res: any) => {
   const { email, name, wallet_address, mobile_number, verificationToken } =
     req.body;
-
-  if (!verificationToken) {
-    return res.status(400).json({ error: "Verification token required" });
-  }
 
   try {
     const conditions: string[] = [];
@@ -30,15 +26,22 @@ export const loginOrCreateUser = async (req: any, res: any) => {
 
     let user = null;
 
+    // 1. Try to find existing user
     if (conditions.length > 0) {
-      const query = `SELECT * FROM users WHERE ${conditions.join(
-        " OR "
-      )} LIMIT 1`;
+      const query = `SELECT * FROM users WHERE ${conditions.join(" OR ")} LIMIT 1`;
       const result = await pool.query(query, values);
       user = result.rows[0];
     }
 
+    // 2. If no user found, create a new one
     if (!user) {
+      // Guard: Don't create empty users
+      if (!email && !wallet_address && !mobile_number) {
+        return res
+          .status(400)
+          .json({ error: "At least email, wallet, or mobile required." });
+      }
+
       const insertResult = await pool.query(
         `INSERT INTO users (name, email, wallet_address, mobile_number)
          VALUES ($1, $2, $3, $4)
@@ -52,25 +55,37 @@ export const loginOrCreateUser = async (req: any, res: any) => {
           mobile_number && String(mobile_number).trim() !== ""
             ? mobile_number.trim()
             : null,
-        ]
+        ],
       );
       user = insertResult.rows[0];
     }
 
-    await pool.query(
-      `INSERT INTO verification (user_id, token)
-       VALUES ($1, $2)
-       ON CONFLICT (token) DO NOTHING`,
-      [user.id, verificationToken]
-    );
+    // 3. Save Verification Token (If provided - e.g. for Desktop Launcher Sync)
+    // We do this silently so it doesn't block the web login
+    if (verificationToken) {
+      await pool.query(
+        `INSERT INTO verification (user_id, token)
+         VALUES ($1, $2)
+         ON CONFLICT (token) DO NOTHING`,
+        [user.id, verificationToken],
+      );
+    }
 
-    res.json({ user });
+    // 4. GENERATE TOKENS IMMEDIATELY (The Fix)
+    // This allows the web frontend to log in right now without a second call
+    const tokens = generateTokens(user.id);
+
+    // 5. Return User AND Tokens
+    res.json({
+      user,
+      tokens, // Frontend can now use tokens.accessToken
+      message: "Login successful",
+    });
   } catch (err: any) {
     console.error("Error in loginOrCreateUser:", err);
     res.status(500).json({ error: err.message });
   }
 };
-
 // Verify launcher token
 export const verifyLauncherToken = async (req: any, res: any) => {
   const { verificationToken } = req.body;
@@ -109,7 +124,7 @@ export const createUser = async (req: Request, res: Response) => {
   try {
     const result = await pool.query(
       `INSERT INTO users (name, wallet_address, email, mobile_number, coins) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [name, wallet_address, email, mobile_number, coins || 0]
+      [name, wallet_address, email, mobile_number, coins || 0],
     );
     res.status(201).json(result.rows[0]);
   } catch (err: any) {
@@ -134,7 +149,7 @@ export const updateUser = async (req: Request, res: Response) => {
   const { name, wallet_address, email, mobile_number, coins } = req.body;
   const result = await pool.query(
     `UPDATE users SET name=$1, wallet_address=$2, email=$3, mobile_number=$4, coins=$5 WHERE id=$6 RETURNING *`,
-    [name, wallet_address, email, mobile_number, coins, id]
+    [name, wallet_address, email, mobile_number, coins, id],
   );
   if (!result.rows[0]) return res.status(404).json({ error: "User not found" });
   res.json(result.rows[0]);
@@ -158,7 +173,7 @@ export const updateCoins = async (req: any, res: any) => {
 
   const result = await pool.query(
     `UPDATE users SET coins=$1 WHERE id=$2 RETURNING *`,
-    [coins, id]
+    [coins, id],
   );
   if (!result.rows[0]) return res.status(404).json({ error: "User not found" });
   res.json(result.rows[0]);

@@ -1,12 +1,7 @@
 import { Request, Response } from "express";
-import { Pool } from "pg";
+import { pool } from "./../db/db";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-
-// Database Connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-key";
 
