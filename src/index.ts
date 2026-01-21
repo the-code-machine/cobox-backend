@@ -28,6 +28,7 @@ import {
   getMyPublishedGames,
   incrementView,
   incrementInstall,
+  getGameById,
 } from "./controllers/publish.controller";
 
 import {
@@ -85,9 +86,10 @@ app.post(
     { name: "thumbnail", maxCount: 1 },
     { name: "gameFile", maxCount: 1 },
   ]),
-  publishGame
+  publishGame,
 );
 app.put("/api/published-games/:id/view", authenticateJWT, incrementView);
+app.put("/api/published-games/:id", authenticateJWT, getGameById);
 app.put("/api/published-games/:id/install", authenticateJWT, incrementInstall);
 
 app.post("/api/v1/admin/register", createAdmin); // Create new admin
@@ -95,5 +97,5 @@ app.post("/api/v1/admin/login", loginAdmin); // Login & Get Token
 app.get("/api/v1/admin/me", authenticateToken, getAdminProfile);
 
 app.listen(PORT, () =>
-  console.log(`🚀 Server running at http://localhost:${PORT}`)
+  console.log(`🚀 Server running at http://localhost:${PORT}`),
 );
