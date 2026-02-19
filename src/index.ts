@@ -32,7 +32,7 @@ import {
   setPrimaryWallet,
   updateWalletLabel,
   getWalletsByUserId,
-} from "./controllers/Wallet.controller";
+} from "./controllers/wallet.controller";
 
 import {
   createGameVersion,
