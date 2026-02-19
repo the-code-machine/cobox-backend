@@ -2,102 +2,73 @@ import { Request, Response } from "express";
 import { pool } from "./../db/db";
 import { generateTokens } from "../middlewares/auth.middleware";
 
+// ─────────────────────────────────────────────
+//  LOGIN OR CREATE USER  (Email-based only)
+// ─────────────────────────────────────────────
 export const loginOrCreateUser = async (req: any, res: any) => {
-  const { email, name, wallet_address, mobile_number, verificationToken } =
-    req.body;
+  const { email, name, mobile_number, verificationToken } = req.body;
+
+  // Email is now required - wallets are handled separately
+  if (!email || !email.trim()) {
+    return res.status(400).json({ error: "Email is required to login." });
+  }
 
   try {
     let user = null;
 
-    // --- STEP 1: Find User (Prioritize Wallet, then Email) ---
-
-    // A. Try finding by Wallet Address first (Strongest link for Web3)
-    if (wallet_address) {
-      const walletQuery = `SELECT * FROM users WHERE wallet_address = $1 LIMIT 1`;
-      const walletRes = await pool.query(walletQuery, [wallet_address]);
-      user = walletRes.rows[0];
-    }
-
-    // B. If not found by wallet, try finding by Email
-    if (!user && email) {
-      const emailQuery = `SELECT * FROM users WHERE email = $1 LIMIT 1`;
-      const emailRes = await pool.query(emailQuery, [email]);
-      user = emailRes.rows[0];
-    }
-
-    // --- STEP 2: Logic to UPDATE or CREATE ---
+    // ── STEP 1: Find user by email ──
+    const emailRes = await pool.query(
+      `SELECT * FROM users WHERE email = $1 LIMIT 1`,
+      [email.trim().toLowerCase()],
+    );
+    user = emailRes.rows[0];
 
     if (user) {
-      // User FOUND. Now check if we need to upgrade their data.
-
-      const updates = [];
-      const values = [];
+      // ── STEP 2A: User EXISTS — update name/mobile if we got better data ──
+      const updates: string[] = [];
+      const values: any[] = [];
       let index = 1;
 
-      // Check 1: Update Email if the DB has a placeholder/null and we have a real one
-      // (e.g. upgrading from "0x...@wallet.connect" to "caplock.connect@gmail.com")
-      const isPlaceholderEmail =
-        !user.email || user.email.includes("@wallet.connect");
-      if (email && (isPlaceholderEmail || user.email !== email)) {
-        // Only update if the new email is "better" (not a placeholder)
-        if (!email.includes("@wallet.connect")) {
-          updates.push(`email = $${index++}`);
-          values.push(email);
-          // Update local object for response
-          user.email = email;
-        }
-      }
-
-      // Check 2: Update Name if DB has generic name and we have a specific one
       const isGenericName =
-        !user.name ||
-        user.name.includes("User") ||
-        user.name.includes("Wallet");
-      if (name && isGenericName && name !== user.name) {
+        !user.name || user.name === "New User" || user.name.includes("User");
+
+      if (name && isGenericName && name.trim() !== user.name) {
         updates.push(`name = $${index++}`);
-        values.push(name);
-        user.name = name;
+        values.push(name.trim());
+        user.name = name.trim();
       }
 
-      // Check 3: Update Wallet if found by email but wallet is missing/different
-      if (wallet_address && user.wallet_address !== wallet_address) {
-        updates.push(`wallet_address = $${index++}`);
-        values.push(wallet_address);
-        user.wallet_address = wallet_address;
+      if (mobile_number && !user.mobile_number) {
+        updates.push(`mobile_number = $${index++}`);
+        values.push(mobile_number.trim());
+        user.mobile_number = mobile_number.trim();
       }
 
-      // EXECUTE UPDATES if any needed
       if (updates.length > 0) {
-        values.push(user.id); // Add ID as the last parameter
-        const updateQuery = `UPDATE users SET ${updates.join(", ")} WHERE id = $${index} RETURNING *`;
-        const updateRes = await pool.query(updateQuery, values);
-        user = updateRes.rows[0]; // Get the fresh, updated user
+        updates.push(`updated_at = NOW()`);
+        values.push(user.id);
+        const updateRes = await pool.query(
+          `UPDATE users SET ${updates.join(", ")} WHERE id = $${index} RETURNING *`,
+          values,
+        );
+        user = updateRes.rows[0];
       }
     } else {
-      // --- STEP 3: Create New User (If absolutely no match found) ---
-
-      // Guard against empty payloads
-      if (!email && !wallet_address && !mobile_number) {
-        return res
-          .status(400)
-          .json({ error: "At least email, wallet, or mobile required." });
-      }
-
-      const insertResult = await pool.query(
-        `INSERT INTO users (name, email, wallet_address, mobile_number)
-         VALUES ($1, $2, $3, $4)
+      // ── STEP 2B: User NOT FOUND — create new ──
+      const insertRes = await pool.query(
+        `INSERT INTO users (name, email, mobile_number)
+         VALUES ($1, $2, $3)
          RETURNING *`,
         [
           name?.trim() || "New User",
-          email?.trim() || null,
-          wallet_address?.trim() || null,
+          email.trim().toLowerCase(),
           mobile_number?.trim() || null,
         ],
       );
-      user = insertResult.rows[0];
+      user = insertRes.rows[0];
     }
 
-    // --- STEP 4: Handle Verification Token (Optional) ---
+    // ── STEP 3: Handle Launcher Verification Token (kept for game launcher flow) ──
     if (verificationToken) {
       await pool.query(
         `INSERT INTO verification (user_id, token)
@@ -107,26 +78,30 @@ export const loginOrCreateUser = async (req: any, res: any) => {
       );
     }
 
-    // --- STEP 5: Return User & Tokens ---
+    // ── STEP 4: Return user + JWT tokens ──
     const tokens = generateTokens(user.id);
 
-    res.json({
+    return res.json({
+      success: true,
       user,
       tokens,
       message: "Login successful",
     });
   } catch (err: any) {
     console.error("Error in loginOrCreateUser:", err);
-    // Handle unique constraint violations gracefully (rare race condition)
     if (err.code === "23505") {
       return res
         .status(409)
         .json({ error: "User conflict. Please try logging in again." });
     }
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 };
-// Verify launcher token
+
+// ─────────────────────────────────────────────
+//  VERIFY LAUNCHER TOKEN
+//  Used by game launcher redirect login flow
+// ─────────────────────────────────────────────
 export const verifyLauncherToken = async (req: any, res: any) => {
   const { verificationToken } = req.body;
   if (!verificationToken)
@@ -134,74 +109,95 @@ export const verifyLauncherToken = async (req: any, res: any) => {
 
   try {
     const verification = (
-      await pool.query(`SELECT * FROM verification WHERE token=$1`, [
+      await pool.query(`SELECT * FROM verification WHERE token = $1`, [
         verificationToken,
       ])
     ).rows[0];
 
-    if (!verification) return res.status(401).json({ error: "Invalid token" });
+    if (!verification)
+      return res.status(401).json({ error: "Invalid or expired token" });
 
     const user = (
-      await pool.query(`SELECT * FROM users WHERE id=$1`, [
+      await pool.query(`SELECT * FROM users WHERE id = $1`, [
         verification.user_id,
       ])
     ).rows[0];
+
     if (!user) return res.status(404).json({ error: "User not found" });
 
     const tokens = generateTokens(user.id);
 
-    await pool.query(`DELETE FROM verification WHERE id=$1`, [verification.id]);
+    // One-time token — delete after use
+    await pool.query(`DELETE FROM verification WHERE id = $1`, [
+      verification.id,
+    ]);
 
-    res.json({ user, tokens });
+    return res.json({ success: true, user, tokens });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 };
 
-// CRUD
+// ─────────────────────────────────────────────
+//  USER CRUD
+// ─────────────────────────────────────────────
+
 export const createUser = async (req: Request, res: Response) => {
-  const { name, wallet_address, email, mobile_number, coins } = req.body;
+  const { name, email, mobile_number, coins } = req.body;
+  if (!email) return res.status(400).json({ error: "Email is required" });
   try {
     const result = await pool.query(
-      `INSERT INTO users (name, wallet_address, email, mobile_number, coins) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [name, wallet_address, email, mobile_number, coins || 0],
+      `INSERT INTO users (name, email, mobile_number, coins)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [name, email.toLowerCase(), mobile_number, coins || 0],
     );
-    res.status(201).json(result.rows[0]);
+    return res.status(201).json({ success: true, user: result.rows[0] });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 };
 
 export const getUsers = async (_req: Request, res: Response) => {
-  const result = await pool.query("SELECT * FROM users ORDER BY id ASC");
-  res.json(result.rows);
+  const result = await pool.query(
+    "SELECT id, name, email, mobile_number, coins, created_at FROM users ORDER BY id ASC",
+  );
+  return res.json({ success: true, data: result.rows });
 };
 
 export const getUserDetail = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const result = await pool.query("SELECT * FROM users WHERE id=$1", [id]);
+  const result = await pool.query(
+    "SELECT id, name, email, mobile_number, coins, created_at FROM users WHERE id = $1",
+    [id],
+  );
   if (!result.rows[0]) return res.status(404).json({ error: "User not found" });
-  res.json(result.rows[0]);
+  return res.json({ success: true, user: result.rows[0] });
 };
 
 export const updateUser = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { name, wallet_address, email, mobile_number, coins } = req.body;
+  const { name, email, mobile_number, coins } = req.body;
   const result = await pool.query(
-    `UPDATE users SET name=$1, wallet_address=$2, email=$3, mobile_number=$4, coins=$5 WHERE id=$6 RETURNING *`,
-    [name, wallet_address, email, mobile_number, coins, id],
+    `UPDATE users SET name=$1, email=$2, mobile_number=$3, coins=$4, updated_at=NOW()
+     WHERE id=$5 RETURNING *`,
+    [name, email?.toLowerCase(), mobile_number, coins, id],
   );
   if (!result.rows[0]) return res.status(404).json({ error: "User not found" });
-  res.json(result.rows[0]);
+  return res.json({ success: true, user: result.rows[0] });
 };
 
 export const deleteUser = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const result = await pool.query(`DELETE FROM users WHERE id=$1 RETURNING *`, [
-    id,
-  ]);
+  const result = await pool.query(
+    `DELETE FROM users WHERE id = $1 RETURNING *`,
+    [id],
+  );
   if (!result.rows[0]) return res.status(404).json({ error: "User not found" });
-  res.json({ message: "User deleted", user: result.rows[0] });
+  return res.json({
+    success: true,
+    message: "User deleted",
+    user: result.rows[0],
+  });
 };
 
 export const updateCoins = async (req: any, res: any) => {
@@ -212,9 +208,26 @@ export const updateCoins = async (req: any, res: any) => {
     return res.status(403).json({ error: "Forbidden" });
 
   const result = await pool.query(
-    `UPDATE users SET coins=$1 WHERE id=$2 RETURNING *`,
+    `UPDATE users SET coins = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
     [coins, id],
   );
   if (!result.rows[0]) return res.status(404).json({ error: "User not found" });
-  res.json(result.rows[0]);
+  return res.json({ success: true, user: result.rows[0] });
+};
+
+// ─────────────────────────────────────────────
+//  GET CURRENT USER  (from JWT)
+// ─────────────────────────────────────────────
+export const getMe = async (req: any, res: any) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, name, email, mobile_number, coins, created_at FROM users WHERE id = $1`,
+      [req.userId],
+    );
+    if (!result.rows[0])
+      return res.status(404).json({ error: "User not found" });
+    return res.json({ success: true, user: result.rows[0] });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 };
