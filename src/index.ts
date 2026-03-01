@@ -57,6 +57,15 @@ import {
 } from "./controllers/admin.controller";
 import { authenticateToken } from "./middlewares/admin.middleware";
 
+import {
+  getUserStats,
+  getAdminUsers,
+  getAdminUserById,
+  deleteAdminUser,
+  updateAdminUserCoins,
+  updateAdminUserRole,
+} from "./controllers/admin.users.controller";
+
 // ────────────────────────────────────────────────────
 dotenv.config();
 const app = express();
@@ -153,6 +162,22 @@ app.post("/api/v1/admin/register", createAdmin);
 app.post("/api/v1/admin/login", loginAdmin);
 app.get("/api/v1/admin/me", authenticateToken, getAdminProfile);
 
+// ⚠️  /stats MUST be registered BEFORE /:id — otherwise Express
+//     will match "stats" as the :id param.
+app.get("/api/v1/admin/users/stats", authenticateToken, getUserStats);
+app.get("/api/v1/admin/users", authenticateToken, getAdminUsers);
+app.get("/api/v1/admin/users/:id", authenticateToken, getAdminUserById);
+app.delete("/api/v1/admin/users/:id", authenticateToken, deleteAdminUser);
+app.patch(
+  "/api/v1/admin/users/:id/coins",
+  authenticateToken,
+  updateAdminUserCoins,
+);
+app.patch(
+  "/api/v1/admin/users/:id/role",
+  authenticateToken,
+  updateAdminUserRole,
+);
 // ════════════════════════════════════════════════════
 //  HEALTH CHECK
 // ════════════════════════════════════════════════════
