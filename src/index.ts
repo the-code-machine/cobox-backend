@@ -48,6 +48,7 @@ import {
   incrementView,
   incrementInstall,
   getGameById,
+  updatePublishedGame,
 } from "./controllers/publish.controller";
 
 import {
@@ -140,6 +141,14 @@ app.delete("/api/game-version/:id", deleteGameVersion);
 app.get("/api/published-games", optionalAuthJWT, getAllPublishedGames); // Public with optional auth
 app.get("/api/published-games/my-games", authenticateJWT, getMyPublishedGames);
 app.get("/api/published-games/:id", authenticateJWT, getGameById);
+
+// Add this alongside the existing routes (same multer middleware as POST):
+app.put(
+  "/:id",
+  authenticateJWT,
+  upload.fields([{ name: "thumbnail", maxCount: 1 }]),
+  updatePublishedGame,
+);
 
 app.post(
   "/api/published-games",
