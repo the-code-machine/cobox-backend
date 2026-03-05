@@ -49,6 +49,7 @@ import {
   incrementInstall,
   getGameById,
   updatePublishedGame,
+  deletePublishedGame,
 } from "./controllers/publish.controller";
 
 import {
@@ -150,6 +151,7 @@ app.put(
   updatePublishedGame,
 );
 
+app.delete("/api/published-games/:id", authenticateJWT, deletePublishedGame); // Reuse published game delete for now (can be separated later if needed)
 app.post(
   "/api/published-games",
   authenticateJWT,
