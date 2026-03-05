@@ -144,7 +144,7 @@ app.get("/api/published-games/:id", authenticateJWT, getGameById);
 
 // Add this alongside the existing routes (same multer middleware as POST):
 app.put(
-  "/:id",
+  "/api/published-games/:id",
   authenticateJWT,
   upload.fields([{ name: "thumbnail", maxCount: 1 }]),
   updatePublishedGame,
